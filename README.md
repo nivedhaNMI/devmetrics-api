@@ -9,7 +9,9 @@ A multi-tenant SaaS REST API for tracking engineering delivery metrics per team.
 - **Date range filtering** — query metrics between any two dates
 - **Averages** — get the average value for any metric type per tenant
 - **OpenAPI docs** — interactive Swagger UI included
-- **CI/CD** — GitHub Actions pipeline runs tests, builds JAR, and builds Docker image on every push
+- **Monitoring** — Spring Boot Actuator + Micrometer expose metrics at `/actuator/prometheus`; Prometheus scrapes them and Grafana shows a ready-made dashboard
+- **Database migrations** — the schema and indexes are managed by Flyway
+- **CI** — GitHub Actions pipeline runs the tests, builds the JAR and builds the Docker image on every push and pull request to `main`
 
 ## Tech Stack
 
@@ -17,10 +19,12 @@ A multi-tenant SaaS REST API for tracking engineering delivery metrics per team.
 |-------|-----------|
 | Framework | Spring Boot 3.2 |
 | Database | PostgreSQL 16 |
-| Multi-tenancy | Tenant isolation via `X-Tenant-ID` header + query-level filtering |
+| Multi-tenancy | Shared schema: `X-Tenant-ID` header, ThreadLocal tenant context, tenant-scoped queries |
+| Monitoring | Spring Boot Actuator, Micrometer, Prometheus, Grafana |
+| Migrations | Flyway |
 | API Docs | SpringDoc OpenAPI |
 | Testing | JUnit 5, Mockito |
-| CI/CD | GitHub Actions |
+| CI | GitHub Actions |
 | Runtime | Java 21 |
 | Containers | Docker, Docker Compose |
 
@@ -30,8 +34,12 @@ A multi-tenant SaaS REST API for tracking engineering delivery metrics per team.
 docker-compose up --build
 ```
 
-App runs on `http://localhost:8082`
-Swagger UI: `http://localhost:8082/swagger-ui.html`
+| Service | URL |
+|---------|-----|
+| API | `http://localhost:8082` |
+| Swagger UI | `http://localhost:8082/swagger-ui.html` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` (login `admin` / `admin`, dashboard "DevMetrics API") |
 
 ## How multi-tenancy works
 
@@ -77,10 +85,26 @@ curl http://localhost:8082/api/metrics \
 | `LEAD_TIME_DAYS` | Days from commit to production |
 | `CHANGE_FAILURE_RATE` | Percentage of deployments causing failures |
 
-## CI/CD Pipeline
+## Monitoring
 
-The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push to `main`:
-1. Spins up a PostgreSQL test container
+- `/actuator/health` — is the app up?
+- `/actuator/prometheus` — all metrics in Prometheus format (HTTP requests, response times, JVM memory, database connections)
+- Custom business metric `devmetrics_metrics_recorded_total`, counted per tenant and metric type
+
+The Grafana dashboard (provisioned automatically from `monitoring/grafana/`) shows requests per second, average response time, metrics recorded per tenant and JVM heap usage. Actuator endpoints don't need the `X-Tenant-ID` header.
+
+## Tests
+
+```bash
+mvn test
+```
+
+Unit tests with JUnit 5 and Mockito: tenant assignment, tenant-scoped queries, the monitoring counter, and the tenant filter (missing or invalid header, ThreadLocal cleared after each request, monitoring endpoints without header).
+
+## CI Pipeline
+
+The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and pull request to `main`:
+1. Starts a PostgreSQL service container
 2. Runs all unit tests
 3. Builds the JAR
 4. Builds the Docker image
@@ -93,6 +117,9 @@ src/main/java/com/nivedha/devmetrics/
 ├── model/          # Metric entity
 ├── repository/     # Tenant-scoped database queries
 ├── service/        # Business logic
+├── dto/            # Request objects (what clients may send)
 └── tenant/         # TenantContext + TenantFilter
-.github/workflows/  # GitHub Actions CI/CD
+src/main/resources/db/migration/  # Flyway migrations
+monitoring/         # Prometheus config + Grafana datasource and dashboard
+.github/workflows/  # GitHub Actions CI
 ```

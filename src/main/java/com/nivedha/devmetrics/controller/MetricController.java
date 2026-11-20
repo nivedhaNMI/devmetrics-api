@@ -1,5 +1,6 @@
 package com.nivedha.devmetrics.controller;
 
+import com.nivedha.devmetrics.dto.RecordMetricRequest;
 import com.nivedha.devmetrics.model.Metric;
 import com.nivedha.devmetrics.service.MetricService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +27,13 @@ public class MetricController {
 
     @PostMapping
     @Operation(summary = "Record a new metric for the current tenant")
-    public ResponseEntity<Metric> recordMetric(@Valid @RequestBody Metric metric) {
+    public ResponseEntity<Metric> recordMetric(@Valid @RequestBody RecordMetricRequest request) {
+        Metric metric = new Metric();
+        metric.setTeamName(request.teamName());
+        metric.setType(request.type());
+        metric.setValue(request.value());
+        metric.setRecordedDate(request.recordedDate());
+        metric.setNotes(request.notes());
         return ResponseEntity.status(HttpStatus.CREATED).body(metricService.recordMetric(metric));
     }
 

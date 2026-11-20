@@ -21,6 +21,13 @@ public class TenantFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
 
+        // Only the business API is tenant-scoped. Swagger, API docs and
+        // monitoring endpoints (/actuator/**) work without the header.
+        if (!request.getRequestURI().startsWith("/api/")) {
+            chain.doFilter(req, res);
+            return;
+        }
+
         String tenantId = request.getHeader(TENANT_HEADER);
 
         if (tenantId == null || tenantId.isBlank()) {
